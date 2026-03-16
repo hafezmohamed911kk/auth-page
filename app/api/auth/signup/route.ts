@@ -30,10 +30,25 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Check if required environment variables are set
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.error('[v0] Missing Supabase configuration')
+      return NextResponse.json(
+        { error: 'Server configuration error. Please check environment variables.' },
+        { status: 500 }
+      )
+    }
+
+    // Check for service role key - this is required for sending confirmation emails
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.warn('[v0] SUPABASE_SERVICE_ROLE_KEY not configured. Confirmation emails may not be sent.')
+    }
+
     // Create a Supabase client with service role key (for server-side operations)
+    // Service role key is required to send confirmation emails
     const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
       {
         auth: {
           autoRefreshToken: false,
@@ -42,13 +57,8 @@ export async function POST(request: NextRequest) {
       }
     )
 
-    // Create a regular client for auth operations (uses anon key)
-    const supabaseClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-
     // Sign up user in Supabase Auth
+    // Do NOT set email_confirm to true - we want Supabase to send the confirmation email
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
@@ -57,6 +67,15 @@ export async function POST(request: NextRequest) {
         lastName,
         phone,
       },
+      // Leave email_confirm unset so Supabase sends confirmation email
+    })
+
+    // Log the result for debugging
+    console.log('[v0] Auth user created:', {
+      userId: authData?.user?.id,
+      email: authData?.user?.email,
+      emailConfirmed: authData?.user?.email_confirmed_at,
+      error: authError?.message,
     })
 
     if (authError) {
@@ -106,10 +125,28 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Send confirmation email using Supabase admin API
+    try {
+      console.log('[v0] Attempting to send confirmation email to:', email)
+      
+      const { data, error: emailError } = await supabaseAdmin.auth.admin.resendEmail({
+        email: email,
+        type: 'signup',
+      })
+      
+      if (emailError) {
+        console.warn('[v0] Supabase email error:', emailError.message)
+      } else {
+        console.log('[v0] Confirmation email sent successfully to:', email)
+      }
+    } catch (emailSendError) {
+      console.warn('[v0] Error sending confirmation email:', emailSendError)
+    }
+
     // Return success response
     return NextResponse.json(
       { 
-        message: 'Signup successful',
+        message: 'Signup successful. Please check your email for confirmation.',
         user: {
           id: authData.user.id,
           email: authData.user.email,
