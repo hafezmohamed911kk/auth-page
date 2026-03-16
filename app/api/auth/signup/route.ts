@@ -1,5 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { Resend } from 'resend'
+
+const resend = new Resend(process.env.RESEND_API_KEY)
 
 export async function POST(request: NextRequest) {
   try {
@@ -125,10 +128,56 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Send confirmation email using Resend
+    if (process.env.RESEND_API_KEY) {
+      try {
+        console.log('[v0] Attempting to send confirmation email to:', email)
+        
+        // Generate a magic link for email verification
+        const magicLinkUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/auth/verify?token=${authData.user.id}`
+        
+        const emailResponse = await resend.emails.send({
+          from: 'noreply@example.com',
+          to: email,
+          subject: 'Confirm Your Email Address',
+          html: `
+            <html>
+              <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                  <h2>Welcome ${firstName}!</h2>
+                  <p>Thank you for signing up. Please confirm your email address to activate your account.</p>
+                  <a href="${magicLinkUrl}" style="display: inline-block; padding: 12px 24px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px; margin: 20px 0;">
+                    Confirm Email
+                  </a>
+                  <p style="color: #666; font-size: 14px;">Or copy and paste this link:</p>
+                  <p style="word-break: break-all; background-color: #f5f5f5; padding: 10px; border-radius: 4px;">
+                    ${magicLinkUrl}
+                  </p>
+                  <p style="color: #666; font-size: 12px; margin-top: 20px;">
+                    If you didn't create this account, please ignore this email.
+                  </p>
+                </div>
+              </body>
+            </html>
+          `,
+        })
+        
+        if (emailResponse.error) {
+          console.warn('[v0] Resend email error:', emailResponse.error)
+        } else {
+          console.log('[v0] Confirmation email sent successfully to:', email, 'ID:', emailResponse.data?.id)
+        }
+      } catch (emailSendError) {
+        console.warn('[v0] Error sending confirmation email:', emailSendError)
+      }
+    } else {
+      console.warn('[v0] RESEND_API_KEY not configured. Confirmation emails will not be sent.')
+    }
+
     // Return success response
     return NextResponse.json(
       { 
-        message: 'Signup successful',
+        message: 'Signup successful. Please check your email for confirmation.',
         user: {
           id: authData.user.id,
           email: authData.user.email,
