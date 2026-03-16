@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
     try {
       console.log('[v0] Attempting to send confirmation email to:', email)
       
-      const { data, error: emailError } = await supabaseAdmin.auth.admin.sendEmail({
+      const { data, error: emailError } = await supabaseAdmin.auth.admin.resendEmail({
         email: email,
         type: 'signup',
       })
@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
       if (emailError) {
         console.warn('[v0] Supabase email error:', emailError.message)
       } else {
-        console.log('[v0] Confirmation email queued for sending to:', email)
+        console.log('[v0] Confirmation email sent successfully to:', email)
       }
     } catch (emailSendError) {
       console.warn('[v0] Error sending confirmation email:', emailSendError)
