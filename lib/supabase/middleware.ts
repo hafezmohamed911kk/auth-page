@@ -11,29 +11,34 @@ export async function updateSession(request: NextRequest) {
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (!supabaseUrl || !supabaseKey) {
-    console.error('[v0] Missing Supabase credentials. Please configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your environment variables.')
+    console.warn('[v0] Supabase credentials not configured. Auth functionality will be disabled.')
     return supabaseResponse
   }
 
-  const supabase = createServerClient(
-    supabaseUrl,
-    supabaseKey,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
+  try {
+    const supabase = createServerClient(
+      supabaseUrl,
+      supabaseKey,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll()
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              supabaseResponse.cookies.set(name, value, options)
+            })
+          },
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            supabaseResponse.cookies.set(name, value, options)
-          })
-        },
-      },
-    }
-  )
+      }
+    )
 
-  // This refreshes a user's auth token - required for any auth functionality
-  await supabase.auth.getUser()
+    // This refreshes a user's auth token - required for any auth functionality
+    await supabase.auth.getUser()
+  } catch (error) {
+    console.error('[v0] Error in Supabase middleware:', error)
+    // Don't crash the middleware - just continue without auth
+  }
 
   return supabaseResponse
 }

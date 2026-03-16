@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
     )
 
     // Sign up user in Supabase Auth
-    // Remove email_confirm flag to allow Supabase to send confirmation email
+    // Do NOT set email_confirm to true - we want Supabase to send the confirmation email
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
@@ -67,6 +67,15 @@ export async function POST(request: NextRequest) {
         lastName,
         phone,
       },
+      // Leave email_confirm unset so Supabase sends confirmation email
+    })
+
+    // Log the result for debugging
+    console.log('[v0] Auth user created:', {
+      userId: authData?.user?.id,
+      email: authData?.user?.email,
+      emailConfirmed: authData?.user?.email_confirmed_at,
+      error: authError?.message,
     })
 
     if (authError) {
