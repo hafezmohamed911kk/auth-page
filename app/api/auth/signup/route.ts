@@ -30,10 +30,25 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Check if required environment variables are set
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.error('[v0] Missing Supabase configuration')
+      return NextResponse.json(
+        { error: 'Server configuration error. Please check environment variables.' },
+        { status: 500 }
+      )
+    }
+
+    // Check for service role key - this is required for sending confirmation emails
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.warn('[v0] SUPABASE_SERVICE_ROLE_KEY not configured. Confirmation emails may not be sent.')
+    }
+
     // Create a Supabase client with service role key (for server-side operations)
+    // Service role key is required to send confirmation emails
     const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
       {
         auth: {
           autoRefreshToken: false,
@@ -42,13 +57,8 @@ export async function POST(request: NextRequest) {
       }
     )
 
-    // Create a regular client for auth operations (uses anon key)
-    const supabaseClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-
     // Sign up user in Supabase Auth
+    // Remove email_confirm flag to allow Supabase to send confirmation email
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
